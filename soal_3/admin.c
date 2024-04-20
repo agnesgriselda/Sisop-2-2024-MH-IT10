@@ -10,9 +10,19 @@
 #define MAX_COMMAND_LENGTH 1024
 
 void show_processes(char *user) {
-    char command[MAX_COMMAND_LENGTH];
-    snprintf(command, MAX_COMMAND_LENGTH, "ps -u %s", user);
-    system(command);
+    pid_t pid = fork();
+    if (pid == 0) {
+        char command[MAX_COMMAND_LENGTH];
+        snprintf(command, MAX_COMMAND_LENGTH, "ps -u %s", user);
+        execl("/bin/sh", "sh", "-c", command, NULL);
+        perror("execl");
+        exit(EXIT_FAILURE);
+    } else if (pid < 0) {
+      perror("fork");
+      exit(EXIT_FAILURE);
+    } else {
+      wait(NULL);
+    }
 }
 
 int check_process_status(int pid) {
@@ -74,9 +84,19 @@ void monitor_processes(char *user) {
 }
 
 void kill_processes(char *user) {
-    char command[MAX_COMMAND_LENGTH];
-    snprintf(command, MAX_COMMAND_LENGTH, "pkill -u %s", user);
-    system(command);
+    pid_t pid = fork();
+    if (pid == 0) {
+        char command[MAX_COMMAND_LENGTH];
+        snprintf(command, MAX_COMMAND_LENGTH, "pkill -u %s", user);
+        execl("/bin/sh", "sh", "-c", command, NULL);
+        perror("execl");
+        exit(EXIT_FAILURE);
+    } else if (pid < 0) {
+      perror("fork");
+      exit(EXIT_FAILURE);
+    } else {
+      wait(NULL);
+    }
 }
 
 int main(int argc, char *argv[]) {
@@ -102,13 +122,23 @@ int main(int argc, char *argv[]) {
             monitor_processes(user);
             exit(0);
         } else if (pid < 0) {
-            fprintf(stderr, "Tidak dapat membuat proses baru\n");
-            return 1;
+            perror("fork");
+            exit(EXIT_FAILURE);
         }
     } else if (strcmp(option, "-s") == 0) {
-        char command[MAX_COMMAND_LENGTH];
-        snprintf(command, MAX_COMMAND_LENGTH, "pkill -f 'monitor_processes %s'", user);
-        system(command);
+        pid_t pid = fork();
+        if (pid == 0) {
+            char command[MAX_COMMAND_LENGTH];
+            snprintf(command, MAX_COMMAND_LENGTH, "pkill -f 'monitor_processes %s'", user);
+            execl("/bin/sh", "sh", "-c", command, NULL);
+            perror("execl");
+            exit(EXIT_FAILURE);
+        } else if (pid < 0) {
+            perror("fork");
+            exit(EXIT_FAILURE);
+        } else {
+            wait(NULL);
+        }
     } else if (strcmp(option, "-c") == 0) {
         pid_t pid = fork();
         if (pid == 0) {
@@ -118,13 +148,23 @@ int main(int argc, char *argv[]) {
             }
             exit(0);
         } else if (pid < 0) {
-            fprintf(stderr, "Tidak dapat membuat proses baru\n");
-            return 1;
+            perror("fork");
+            exit(EXIT_FAILURE);
         }
     } else if (strcmp(option, "-a") == 0) {
-        char command[MAX_COMMAND_LENGTH];
-        snprintf(command, MAX_COMMAND_LENGTH, "pkill -f 'kill_processes %s'", user);
-        system(command);
+        pid_t pid = fork();
+        if (pid == 0) {
+            char command[MAX_COMMAND_LENGTH];
+            snprintf(command, MAX_COMMAND_LENGTH, "pkill -f 'kill_processes %s'", user);
+            execl("/bin/sh", "sh", "-c", command, NULL);
+            perror("execl");
+            exit(EXIT_FAILURE);
+        } else if (pid < 0) {
+            perror("fork");
+            exit(EXIT_FAILURE);
+        } else {
+            wait(NULL);
+        }
     } else {
         fprintf(stderr, "Opsi tidak valid\n");
         return 1;
