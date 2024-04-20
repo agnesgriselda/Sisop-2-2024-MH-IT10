@@ -99,7 +99,7 @@ void load_configuration(char *config_file) {
 void terminate_all_apps() {
     pid_t pid = fork();
     if (pid == 0) {
-        execlp("killall", "killall", "firefox", NULL);
+        execlp("pkill", "pkill", "firefox", NULL);
         exit(0);
     } else if (pid < 0) {
         printf("Error: Fork failed\n");
@@ -109,7 +109,7 @@ void terminate_all_apps() {
 
     pid = fork();
     if (pid == 0) {
-        execlp("killall", "killall", "wireshark", NULL);
+        execlp("pkill", "pkill", "wireshark", NULL);
         exit(0);
     } else if (pid < 0) {
         printf("Error: Fork failed\n");
@@ -130,7 +130,7 @@ void terminate_apps_from_config(char *config_file) {
     while (fscanf(file, "%s", app) == 1) {
         pid_t pid = fork();
         if (pid == 0) {
-            execlp("killall", "killall", app, NULL);
+            execlp("pkill", "pkill", app, NULL);
             exit(0);
         } else if (pid < 0) {
             printf("Error: Fork failed\n");
