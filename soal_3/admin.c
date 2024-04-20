@@ -1,137 +1,134 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <fcntl.h>
+#include <signal.h>
 #include <string.h>
 #include <time.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
-#define MAX_ARGS 10
-#define LOG_FILE_EXTENSION ".log"
+#define MAX_COMMAND_LENGTH 1024
 
-void monitor_process(char *user) {
-    pid_t child_pid;
-    int status;
+void show_processes(char *user) {
+    char command[MAX_COMMAND_LENGTH];
+    snprintf(command, MAX_COMMAND_LENGTH, "ps -u %s", user);
+    system(command);
+}
 
-    child_pid = fork();
-    if (child_pid < 0) {
-        perror("Error in fork");
-        exit(EXIT_FAILURE);
-    } else if (child_pid == 0) {
-        // Child process
-        char *args[] = {"ps", "-U", user, NULL};
-        execv("/bin/ps", args);
-        perror("execv");
-        exit(EXIT_FAILURE);
+int check_process_status(int pid) {
+    char status_file[MAX_COMMAND_LENGTH];
+    snprintf(status_file, MAX_COMMAND_LENGTH, "/proc/%d", pid);
+    if (access(status_file, F_OK) != -1) {
+        return 1; // Proses sedang berjalan
     } else {
-        // Parent process
-        waitpid(child_pid, &status, 0);
+        return 0; // Proses tidak berjalan
     }
 }
-void stop_monitoring(char *user) {
-    // Membuat nama file PID daemon
-    char pid_filename[50];
-    snprintf(pid_filename, sizeof(pid_filename), "%s%s", user, ".pid");
 
-    // Membuka file PID daemon
-    FILE *pid_file = fopen(pid_filename, "r");
-    if (pid_file == NULL) {
-        printf("Daemon process is not running for user %s\n", user);
+void monitor_processes(char *user) {
+    pid_t pid;
+    char log_file[MAX_COMMAND_LENGTH];
+    snprintf(log_file, MAX_COMMAND_LENGTH, "%s.log", user);
+    FILE *fp = fopen(log_file, "a");
+    if (fp == NULL) {
+        fprintf(stderr, "Tidak dapat membuka file log %s\n", log_file);
         return;
     }
 
-    // Membaca PID daemon
-    pid_t daemon_pid;
-    fscanf(pid_file, "%d", &daemon_pid);
-    fclose(pid_file);
+    while (1) {
+        char command[MAX_COMMAND_LENGTH];
+        snprintf(command, MAX_COMMAND_LENGTH, "ps -u %s --no-headers -o pid,command", user);
+        FILE *pipe = popen(command, "r");
+        if (pipe == NULL) {
+            fprintf(stderr, "Tidak dapat menjalankan command %s\n", command);
+            fclose(fp);
+            return;
+        }
 
-    // Mengirim sinyal SIGTERM ke daemon untuk menghentikannya
-    if (kill(daemon_pid, SIGTERM) == -1) {
-        perror("Error sending SIGTERM to daemon");
-        return;
+        char line[MAX_COMMAND_LENGTH];
+        time_t current_time = time(NULL);
+        struct tm *local_time = localtime(&current_time);
+        char timestamp[20];
+        char date[11];
+        strftime(timestamp, sizeof(timestamp), "%H:%M:%S", local_time);
+        strftime(date, sizeof(date), "%d-%m-%Y", local_time);
+
+        while (fgets(line, sizeof(line), pipe)) {
+            char pid_str[10], process[MAX_COMMAND_LENGTH];
+            sscanf(line, "%s %[^\n]", pid_str, process);
+            int pid = atoi(pid_str);
+            char status[7] = "JALAN"; // Asumsikan semua proses berjalan dengan baik
+
+            if (!check_process_status(pid)) {
+                strcpy(status, "GAGAL"); // Jika proses tidak berjalan, ubah status menjadi GAGAL
+            }
+
+            fprintf(fp, "[%s]-[%s]-%d-%s-%s\n", date, timestamp, pid, process, status);
+        }
+
+        pclose(pipe);
+        sleep(1);
     }
 
-    printf("Monitoring stopped for user %s\n", user);
+    fclose(fp);
 }
-void block_processes(char *user) {
-    // Membuat nama file daftar blokir
-    char blocklist_filename[50];
-    snprintf(blocklist_filename, sizeof(blocklist_filename), "%s%s", user, ".blocklist");
 
-    // Membuka file daftar blokir
-    FILE *blocklist_file = fopen(blocklist_filename, "w");
-    if (blocklist_file == NULL) {
-        perror("Error opening blocklist file");
-        return;
-    }
-
-    // Menulis pesan bahwa proses diblokir ke dalam file
-    fprintf(blocklist_file, "All processes blocked for user %s\n", user);
-
-    // Menutup file daftar blokir
-    fclose(blocklist_file);
-
-    printf("All processes blocked for user %s\n", user);
+void kill_processes(char *user) {
+    char command[MAX_COMMAND_LENGTH];
+    snprintf(command, MAX_COMMAND_LENGTH, "pkill -u %s", user);
+    system(command);
 }
-void unblock_processes(char *user) {
-    // Membuat nama file daftar blokir
-    char blocklist_filename[50];
-    snprintf(blocklist_filename, sizeof(blocklist_filename), "%s%s", user, ".blocklist");
 
-    // Menghapus file daftar blokir
-    if (remove(blocklist_filename) == -1) {
-        perror("Error removing blocklist file");
-        return;
-    }
-
-    printf("All processes unblocked for user %s\n", user);
-}
-void log_process(char *user, pid_t pid, char *process_name, int status) {
-    // Membuat string timestamp
-    time_t now = time(NULL);
-    struct tm *tm_info = localtime(&now);
-    char timestamp[20];
-    strftime(timestamp, sizeof(timestamp), "[%d:%m:%Y]-[%H:%M:%S]", tm_info);
-
-    // Membuat nama file log berdasarkan nama pengguna
-    char log_filename[50];
-    snprintf(log_filename, sizeof(log_filename), "%s%s%s", user, ".log", timestamp);
-
-    // Membuka file log
-    FILE *log_file = fopen(log_filename, "a");
-    if (log_file == NULL) {
-        perror("Error opening log file");
-        return;
-    }
-
-    // Menuliskan entri log ke dalam file
-    fprintf(log_file, "%s-%d-%s-%s\n", timestamp, pid, process_name, (status == 0) ? "JALAN" : "GAGAL");
-
-    // Menutup file log
-    fclose(log_file);
-}
 int main(int argc, char *argv[]) {
-    if (argc < 2) {
-        printf("Usage: %s <options> <user>\n", argv[0]);
-        return EXIT_FAILURE;
+    if (argc < 3) {
+        fprintf(stderr, "Penggunaan: %s <opsi> <user>\n", argv[0]);
+        fprintf(stderr, "Opsi:\n");
+        fprintf(stderr, "  -l: Tampilkan proses yang sedang berjalan\n");
+        fprintf(stderr, "  -m: Pantau proses yang dijalankan\n");
+        fprintf(stderr, "  -s: Hentikan pemantauan proses\n");
+        fprintf(stderr, "  -c: Gagalkan proses yang dijalankan secara terus-menerus\n");
+        fprintf(stderr, "  -a: Hentikan penggagalan proses\n");
+        return 1;
     }
 
-    char *user = argv[argc - 1]; // Mengambil nama pengguna dari argumen terakhir
+    char *option = argv[1];
+    char *user = argv[2];
 
-    // Memeriksa opsi yang diberikan dan memanggil fungsi yang sesuai
-    if (strcmp(argv[1], "-m") == 0) {
-        monitor_process(user);
-    } else if (strcmp(argv[1], "-s") == 0) {
-        stop_monitoring(user);
-    } else if (strcmp(argv[1], "-c") == 0) {
-        block_processes(user);
-    } else if (strcmp(argv[1], "-a") == 0) {
-        unblock_processes(user);
+    if (strcmp(option, "-l") == 0) {
+        show_processes(user);
+    } else if (strcmp(option, "-m") == 0) {
+        pid_t pid = fork();
+        if (pid == 0) {
+            monitor_processes(user);
+            exit(0);
+        } else if (pid < 0) {
+            fprintf(stderr, "Tidak dapat membuat proses baru\n");
+            return 1;
+        }
+    } else if (strcmp(option, "-s") == 0) {
+        char command[MAX_COMMAND_LENGTH];
+        snprintf(command, MAX_COMMAND_LENGTH, "pkill -f 'monitor_processes %s'", user);
+        system(command);
+    } else if (strcmp(option, "-c") == 0) {
+        pid_t pid = fork();
+        if (pid == 0) {
+            while (1) {
+                kill_processes(user);
+                sleep(1);
+            }
+            exit(0);
+        } else if (pid < 0) {
+            fprintf(stderr, "Tidak dapat membuat proses baru\n");
+            return 1;
+        }
+    } else if (strcmp(option, "-a") == 0) {
+        char command[MAX_COMMAND_LENGTH];
+        snprintf(command, MAX_COMMAND_LENGTH, "pkill -f 'kill_processes %s'", user);
+        system(command);
     } else {
-        printf("Invalid option\n");
-        return EXIT_FAILURE;
+        fprintf(stderr, "Opsi tidak valid\n");
+        return 1;
     }
 
-    return EXIT_SUCCESS;
+    return 0;
 }
