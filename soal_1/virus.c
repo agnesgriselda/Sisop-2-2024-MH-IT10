@@ -30,7 +30,7 @@ void CustomStringReplace(char *str, const char *old, const char *new) {
 void CustomLog(const char *filename, const char *ReplacedString) {
     time_t current_time;
     struct tm *local_time;
-    char timeString[20];
+    char TimeString[20];
 
     FILE *logFile = fopen(LOG_FILE, "a");
     if (logFile == NULL) {
