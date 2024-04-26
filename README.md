@@ -229,6 +229,524 @@ Berikut adalah struktur folder untuk pengerjaan nomor 2:
     ├── management.c
     └── library/
         └── backup/
+### Penjelasan Soal Management.c 
+1. **Memasukkan library yang dibutuhkan** : Langkah Pertama dari mengerjakan soal ini adalah memasukkan library yang akan kita butuhkan, untuk itu kita harus memasukkan library - library yang diantaranya adalah `<stdio.h>`, `<stdlib.h>`, `<time.h>`, dan lain lain.
+2. **Define maksimal buffer size** : Mendefinisikan atau memberi batas maksimal tersebut
+   ```
+   #define MAX_BUFFER_SIZE 1024
+   ```
+3. **Declare Char** : Declare beberapa char yang dibutuhkan diawal namun nantinya masih dibutuhkan declare char disetiap fungsi terutama untuk penggunaan fungsi rekursif dan pointer
+    ```
+    char cwd[MAX_BUFFER_SIZE];
+char dir_path[MAX_BUFFER_SIZE];
+char log_file_path[MAX_BUFFER_SIZE];
+    ```
+4. **Declare Variabel Khusus** : Disini diperlukan deklarasi variabel khusus dengan beberapa fungsi yaitu `volatile` yang berfungsi untuk memberitahu compiler bahwa nilai variabel bisa berubah kapan saja,  `<sig_atomic_t>` ini adalah tipe data yang digunakan untuk variabel yang bisa diakses sebagai satu unit atomik dari sebuah handler sinyal, lalu `<mode = 0>` ini adalah inisialisasi variabel mode dengan nilai 0. Ini mengatur nilai awal dari variabel tersebut, dan nilai ini bisa diubah oleh program, misalnya dalam respons terhadap sinyal tertentu atau peristiwa lain.
+ ```
+ volatile sig_atomic_t mode = 0;
+ ```
+5. **Declare Beberapa fungsi untuk handling signal** : Disini kita memerlukan beberapa fungsi untuk dideklarasikan terlebih dahulu yang mana digunakan untuk melaksanakan mode sesuai signal yang diberikan sesuai pada soal poin e.
+ ```
+void handle_default(int signal_number) { mode = 0; }
+void handle_backup(int signal_number) { mode = 1; }
+void handle_restore(int signal_number) { mode = 2; }
+void handle_exit(int signal_number) { exit(EXIT_SUCCESS); }
+ ```
+6. **Membuat Fungsi Default** : Didalam mode default ini akan ada beberapa fungsi yang kita gunakan diantaranya `download_file`, `unzip_file`, `rename_file`, dan lain lain
+```
+void default_mode()
+{
+   void remove_directory_and_zip(const char *dir_path) {
+    // Menggabungkan path direktori dengan nama folder dan zip
+    char folder_path[MAX_BUFFER_SIZE];
+    snprintf(folder_path, sizeof(folder_path), "%s/library", dir_path);
+
+    char zip_path[MAX_BUFFER_SIZE];
+    snprintf(zip_path, sizeof(zip_path), "%s/library.zip", dir_path);
+
+    //  Membuat proses baru untuk menghapus folder perpustakaan
+    pid_t pid = fork();
+
+    if (pid < 0) {
+        perror("Gagal membuat fork");
+        exit(EXIT_FAILURE);
+    } else if (pid == 0) {
+        // Proses anak untuk menghapus folder perpustakaan
+        char *cmd = "/bin/rm";
+        char *argv[] = {"rm", "-rf", folder_path, NULL};
+        execv(cmd, argv);
+        perror("Gagal mengeksekusi fungsi rm");
+        exit(EXIT_FAILURE);
+    } else {
+        // Proses induk menunggu sampai proses anak selesai
+        int status;
+        wait(&status);
+
+        // Membuat fork lagi untuk menghapus file zip
+        pid = fork();
+
+        if (pid < 0) {
+            perror("Gagal membuat fork");
+            exit(EXIT_FAILURE);
+        } else if (pid == 0) {
+            // Proses anak untuk menghapus file zip
+            char *cmd = "/bin/rm";
+            char *argv[] = {"rm", zip_path, NULL};
+            execv(cmd, argv);
+            perror("Gagal mengeksekusi fungsi rm");
+            exit(EXIT_FAILURE);
+        } else {
+            // Proses induk menunggu sampai proses anak kedua selesai
+            wait(&status);
+        }
+    }
+}
+
+    void download_file() {
+    // Membuat proses baru
+    pid_t pid = fork(); 
+
+     // Aman memasukkan path
+    char download_path[MAX_BUFFER_SIZE];
+    snprintf(download_path, sizeof(download_path), "%s", dir_path); 
+
+    if (pid < 0) {
+        perror("Gagal membuat fork");
+        exit(EXIT_FAILURE);
+    } else if (pid == 0) {
+        // Proses anak untuk mendownload file
+        char *cmd = "/bin/wget";
+        char *argv[] = {
+            "wget", "--content-disposition", "--no-check-certificate",
+            "https://drive.google.com/uc?export=download&id=1rUIZmp10lXLtCIH3LAZJzRPeRks3Crup",
+            "-P", download_path, NULL
+        };
+        execv(cmd, argv);
+        perror("Gagal menjalankan wget");
+        exit(EXIT_FAILURE);
+    } else {
+        // Proses induk menunggu sampai proses anak selesai
+        int status;
+        wait(&status);
+    }
+}
+    void unzip_file() {
+    // Membuat proses baru
+    pid_t pid = fork(); 
+
+    // Aman menggabungkan string
+    char unzip_path[MAX_BUFFER_SIZE];
+    snprintf(unzip_path, sizeof(unzip_path), "%s/library.zip", dir_path); 
+
+    if (pid < 0) {
+        perror("Gagal membuat fork");
+        exit(EXIT_FAILURE);
+    } else if (pid == 0) {
+        // Proses anak untuk mengekstrak file zip
+        char *cmd = "/bin/unzip";
+        char *argv[] = {"unzip", unzip_path, "-d", dir_path, NULL};
+        execv(cmd, argv);
+        perror("Gagal menjalankan unzip");
+        exit(EXIT_FAILURE);
+    } else {
+        // Proses induk menunggu sampai proses anak selesai
+        int status;
+        wait(&status);
+    }
+}
+char rot19(char c) {
+    if (isalpha(c)) {
+        char base = islower(c) ? 'a' : 'A';
+        return (c - base + 19) % 26 + base;  // Mengimplementasikan ROT19
+    }
+    return c;
+}
+
+   // Fungsi rot19 dianggap sudah didefinisikan di tempat lain dalam file yang sama
+char rot19(char c);
+
+void decrypt_filename() {
+    char path[MAX_BUFFER_SIZE];
+    snprintf(path, sizeof(path), "%s/library/", dir_path);  // Aman membangun path
+
+    DIR *dir = opendir(path);
+    if (!dir) {
+        perror("Gagal membuka direktori");
+        return;
+    }
+
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        char *filename = entry->d_name;
+        char new_filename[MAX_BUFFER_SIZE];
+
+        // Lewatkan file yang nama awalnya angka atau titik
+        if (isdigit(filename[0]) || filename[0] == '.') continue;
+
+        // Enkripsi nama file
+        int len = strlen(filename);
+        for (int i = 0; i < len; i++) {
+            new_filename[i] = rot19(filename[i]);
+        }
+        new_filename[len] = '\0';  // Menambahkan null terminator
+
+        // Membangun path lengkap untuk nama lama dan baru
+        char old_path[MAX_BUFFER_SIZE], new_path[MAX_BUFFER_SIZE];
+        snprintf(old_path, sizeof(old_path), "%s%s", path, filename);
+        snprintf(new_path, sizeof(new_path), "%s%s", path, new_filename);
+
+        // Membuat proses baru untuk mengganti nama file
+        pid_t pid = fork();
+
+        if (pid < 0) {
+            perror("Gagal membuat fork");
+            exit(EXIT_FAILURE);
+        } else if (pid == 0) {
+            char *cmd = "/bin/mv";
+            char *argv[] = { "mv", old_path, new_path, NULL };
+            execv(cmd, argv);
+            perror("Gagal menjalankan mv");
+            exit(EXIT_FAILURE);
+        } else {
+            int status;
+            wait(&status);
+        }
+    }
+    closedir(dir);
+}
+   void rename_file() {
+    char path[MAX_BUFFER_SIZE];
+    snprintf(path, sizeof(path), "%s/library/", dir_path);
+
+    DIR *dir = opendir(path);
+    if (!dir) {
+        perror("Gagal membuka direktori");
+        return;
+    }
+
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        char *filename = entry->d_name;
+
+        if (strstr(filename, "r3N4mE") == NULL || filename[0] == '.') continue;
+
+        FILE *file = fopen(log_file_path, "a");
+        if (file != NULL) {
+            fprintf(file, "[%s][%02d:%02d:%02d] - %s - Successfully renamed.\n",
+                    username, digitime->tm_hour, digitime->tm_min, digitime->tm_sec, filename);
+            fclose(file);
+        }
+
+        char old_path[MAX_BUFFER_SIZE], new_path[MAX_BUFFER_SIZE];
+        snprintf(old_path, sizeof(old_path), "%s%s", path, filename);
+
+        const char *new_filename = "renamed.file"; // Default new filename
+        if (strstr(filename, ".ts") != NULL) {
+            new_filename = "helper.ts";
+        } else if (strstr(filename, ".py") != NULL) {
+            new_filename = "calculator.py";
+        } else if (strstr(filename, ".go") != NULL) {
+            new_filename = "server.go";
+        }
+        snprintf(new_path, sizeof(new_path), "%s%s", path, new_filename);
+
+        pid_t pid = fork();
+
+        if (pid < 0) {
+            perror("Gagal membuat fork");
+            exit(EXIT_FAILURE);
+        } else if (pid == 0) {
+            char *cmd = "/bin/mv";
+            char *argv[] = {"mv", old_path, new_path, NULL};
+            execv(cmd, argv);
+            perror("Gagal menjalankan mv");
+            exit(EXIT_FAILURE);
+        } else {
+            int status;
+            wait(&status);
+        }
+    }
+    closedir(dir);
+}
+   void delete_file() {
+    char path[MAX_BUFFER_SIZE];
+    snprintf(path, sizeof(path), "%s/library/", dir_path);
+
+    DIR *dir = opendir(path);
+    if (!dir) {
+        perror("Gagal membuka direktori");
+        return;
+    }
+
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        char *filename = entry->d_name;
+
+        if (strstr(filename, "d3Let3") == NULL || filename[0] == '.') continue;
+
+        FILE *file = fopen(log_file_path, "a");
+        if (file != NULL) {
+            // Misalkan kita memperoleh waktu sekarang untuk log
+            time_t now = time(NULL);
+            digitime = localtime(&now);
+
+            fprintf(file, "[%s][%02d:%02d:%02d] - %s - Successfully deleted.\n",
+                    username, digitime->tm_hour, digitime->tm_min, digitime->tm_sec, filename);
+            fclose(file);
+        }
+
+        char file_path[MAX_BUFFER_SIZE];
+        snprintf(file_path, sizeof(file_path), "%s%s", path, filename);
+
+        pid_t pid = fork();
+
+        if (pid < 0) {
+            perror("Gagal membuat fork");
+            exit(EXIT_FAILURE);
+        } else if (pid == 0) {
+            char *cmd = "/bin/rm";
+            char *argv[] = {"rm", file_path, NULL};
+            execv(cmd, argv);
+            perror("Gagal menjalankan rm");
+            exit(EXIT_FAILURE);
+        } else {
+            int status;
+            wait(&status);
+        }
+    }
+    closedir(dir);
+}
+}
+```
+7. **Membuat Fungsi Backup** : Fungsi Backup juga harus dibuat untuk memenuhi permintaan soal
+```
+void backup() {
+    char path[MAX_BUFFER_SIZE], backup_path[MAX_BUFFER_SIZE];
+    snprintf(path, sizeof(path), "%s/library/", dir_path);
+    snprintf(backup_path, sizeof(backup_path), "%sbackup/", path);
+
+    DIR *dir = opendir(path);
+    if (!dir) {
+        perror("Gagal membuka direktori");
+        return;
+    }
+
+    pid_t pid = fork();
+    if (pid < 0) {
+        perror("Gagal membuat fork");
+        exit(EXIT_FAILURE);
+    }
+
+    if (pid == 0) {
+        struct stat st;
+        if (stat(backup_path, &st) != 0) {  // Hanya buat direktori jika belum ada
+            char *cmd = "/bin/mkdir";
+            char *argv[] = { "mkdir", backup_path, NULL };
+            execv(cmd, argv);
+            perror("Gagal menjalankan mkdir");
+            exit(EXIT_FAILURE);
+        }
+        exit(EXIT_SUCCESS);
+    } else {
+        int status;
+        wait(&status);
+    }
+
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        char *filename = entry->d_name;
+
+        if (strstr(filename, "m0V3") == NULL || filename[0] == '.') continue;
+
+        FILE *file = fopen(log_file_path, "a"); 
+        if (file != NULL) {
+            time_t now = time(NULL);
+            digitime = localtime(&now);
+            fprintf(file, "[%s][%02d:%02d:%02d] - %s - Successfully moved to backup.\n",
+                    username, digitime->tm_hour, digitime->tm_min, digitime->tm_sec, filename); 
+            fclose(file);
+        }
+
+        char file_path[MAX_BUFFER_SIZE], file_backup_path[MAX_BUFFER_SIZE];
+        snprintf(file_path, sizeof(file_path), "%s%s", path, filename);
+        snprintf(file_backup_path, sizeof(file_backup_path), "%s%s", backup_path, filename);
+
+        pid = fork();
+
+        if (pid < 0) {
+            perror("Gagal membuat fork");
+            exit(EXIT_FAILURE);
+        } else if (pid == 0) {
+            char *cmd = "/bin/mv";
+            char *argv[] = { "mv", file_path, file_backup_path, NULL };
+            execv(cmd, argv);
+            perror("Gagal menjalankan mv");
+            exit(EXIT_FAILURE);
+        } else {
+            int status;
+            wait(&status);
+        }
+    }
+    closedir(dir);
+}
+```
+8. **Membuat Fungsi Restore** : Membuat fungsi yang dapat menjalankan mode restore seperti pada soal
+```
+void restore() {
+    char path[MAX_BUFFER_SIZE], backup_path[MAX_BUFFER_SIZE];
+    snprintf(path, sizeof(path), "%s/library/", dir_path);
+    snprintf(backup_path, sizeof(backup_path), "%sbackup/", path);
+
+    DIR *dir = opendir(backup_path);
+    if (!dir) {
+        perror("Gagal membuka direktori backup");
+        return;
+    }
+
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        char *filename = entry->d_name;
+
+        if (strstr(filename, "m0V3") == NULL || filename[0] == '.') continue;
+
+        FILE *file = fopen(log_file_path, "a");
+        if (file != NULL) {
+            time_t now = time(NULL);
+            digitime = localtime(&now);
+            fprintf(file, "[%s][%02d:%02d:%02d] - %s - Successfully restored from backup.\n",
+                    username, digitime->tm_hour, digitime->tm_min, digitime->tm_sec, filename);
+            fclose(file);
+        }
+
+        char file_path[MAX_BUFFER_SIZE], file_backup_path[MAX_BUFFER_SIZE];
+        snprintf(file_path, sizeof(file_path), "%s%s", path, filename);
+        snprintf(file_backup_path, sizeof(file_backup_path), "%s%s", backup_path, filename);
+
+        pid_t pid = fork();
+
+        if (pid < 0) {
+            perror("Gagal membuat fork");
+            exit(EXIT_FAILURE);
+        } else if (pid == 0) {
+            char *cmd = "/bin/mv";
+            char *argv[] = { "mv", file_backup_path, file_path, NULL };
+            execv(cmd, argv);
+            perror("Gagal menjalankan mv");
+            exit(EXIT_FAILURE);
+        } else {
+            int status;
+            wait(&status);
+        }
+    }
+    closedir(dir);
+}
+```
+9. **Deklarasi Variabel Global** : Kita bisa mengetahui dari fungsi fungsi diatas ada beberapa variabel yang mungkin sudah seharusnya dideklarasikan namun karena penggunaannya berulang kali, maka variabel ini dideklarasikan sebelum fungsi main sehingga menandakan bahwa variabel ini merupakan variabel global dan bisa diinisiasi oleh fungsi manapun dalam kode.
+```
+char *username;
+time_t runtime;
+struct tm *digitime;
+```
+10. **Fungsi Main dari kode** : Setelah kita sudah membuat fungsi - fungsi yang dibutuhkan, dibagian akhir kita perlu fungsi utama yang dibutuhkan program yang bisa berisi loop dan berbagai kebutuhan untuk mengeksekusi program.
+```
+int main(int argc, char **argv)
+{
+    char cwd[MAX_BUFFER_SIZE];
+    if (getcwd(cwd, sizeof(cwd)) == NULL) {
+        perror("Gagal mendapatkan direktori kerja saat ini");
+        exit(EXIT_FAILURE);
+    }
+
+    // Membangun path direktori dan log file
+    snprintf(dir_path, sizeof(dir_path), "%s", cwd);
+    snprintf(log_file_path, sizeof(log_file_path), "%s/history.log", dir_path);
+
+    // Mendapatkan username pengguna saat ini
+    username = getlogin();
+    if (username == NULL) {
+        perror("Gagal mendapatkan nama pengguna");
+        username = "unknown";  // Username alternatif jika gagal
+    }
+
+    // Mendapatkan waktu saat ini
+    runtime = time(NULL);
+    digitime = localtime(&runtime);
+
+    // Menyetel penanganan sinyal
+    signal(SIGRTMIN, handle_default);
+    signal(SIGUSR1, handle_backup);
+    signal(SIGUSR2, handle_restore);
+    signal(SIGTERM, handle_exit);
+
+    // Mengecek argumen baris perintah
+    if (argc == 3 && strcmp(argv[1], "-m") == 0) {
+        if (strcmp(argv[2], "backup") == 0) mode = 1;
+        else if (strcmp(argv[2], "restore") == 0) mode = 2;
+    }
+
+    pid_t pid, sid;
+
+    pid = fork();
+
+    if (pid < 0) {
+        perror("Proses fork gagal");
+        exit(EXIT_FAILURE);
+    }
+
+    if (pid > 0) {
+        exit(EXIT_SUCCESS);
+    }
+
+    umask(0);
+
+    // Membuat sesi baru dan mengubah direktori kerja
+    sid = setsid();
+    if (sid < 0) {
+        perror("setsid gagal");
+        exit(EXIT_FAILURE);
+    }
+
+    if (chdir("/") < 0) {
+        perror("Gagal mengubah direktori ke /");
+        exit(EXIT_FAILURE);
+    }
+
+    // Menutup file descriptor standar
+    close(STDIN_FILENO);
+    close(STDOUT_FILENO);
+    close(STDERR_FILENO);
+
+    // Loop utama program
+    while (1) {
+        switch(mode) {
+            case 0:
+                handle_default(SIGRTMIN);  // asumsi mode default ditangani di sini
+                break;
+            case 1:
+                backup();
+                break;
+            case 2:
+                restore();
+                break;
+        }
+        sleep(100);
+    }
+
+    return 0;  // Baris ini tidak akan pernah tercapai
+}
+```
+### Cara Kerja Management.c 
+1. Kompilasi kode menggunakan compiler pada lingkungan linux, pada kasus ini saya menggunakan gcc. Sehingga langkah pertama saya harus menggunakan perintah `gcc management.c -o management`
+2. Eksekusi file dengan perintah `./management.c`
+3. lalu gunakan perintah `ls` untuk memeriksa apakah berhasil tidak. Jika berhasil akan muncul direktori `library` yang mana jika kita masuk kedalamnya dengan perintah `cd library` maka kita akan masuk dan dapat melihat file yang telah di unzip
+4. lalu jika sudah memastikan fungsi tersebut, kita harus memeriksa apakah fungsi backup bisa yaitu dengan perintah `./management -m backup`, jika berhasil maka ketika masuk ke library kita bisa melihat backup sebagai direktori yang menyimpan beberapa file selain yang sudah berubah seperti `calculator.py` dan lain lain.
+5. lalu kita juga harus memeriksa fungsi lain yaitu restore yang akan menggunakan perintah sebagai berikut `./management -m restore` perintah ini akan membuat direktori backup kosong dan mengembalikan file ke direktori library
+### Output Management.c
+![WhatsApp Image 2024-04-27 at 01 08 19 (2)](https://github.com/agnesgriselda/Sisop-2-2024-MH-IT10/assets/144348985/237a5d98-9305-47b5-9e06-2296daade986)
+![WhatsApp Image 2024-04-27 at 01 08 19 (1)](https://github.com/agnesgriselda/Sisop-2-2024-MH-IT10/assets/144348985/a707d38a-d721-4690-849f-e6791342c437)
+![WhatsApp Image 2024-04-27 at 01 08 19](https://github.com/agnesgriselda/Sisop-2-2024-MH-IT10/assets/144348985/e308183e-9a3e-4ce7-9768-0aa76d534f0a)
+
+
 
 ## Soal 3
 Pak Heze adalah seorang admin yang baik. Beliau ingin membuat sebuah program admin yang dapat memantau para pengguna sistemnya. Bantulah Pak Heze untuk membuat program  tersebut!
