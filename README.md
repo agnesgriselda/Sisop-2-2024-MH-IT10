@@ -38,6 +38,140 @@ pU=-JWQ$5$)D-[??%AVh]$cB6b[MALWARE]jEQC2p3R{HV]=-AUaxj:Qe+h
 Pd&f8$F5=E?@#[6jd{TJKj][SPYWARE]{KK1?hz384$ge@iba5GAj$gqB41
 #C&&a}M9C#f64Eb.?%c)dGbCvJXtU[?SE4h]BY4e1P[RANSOMWARE]{]S/{w?*
 
+Tentu, di bawah ini adalah penjelasan mengenai kode yang diberikan:
+
+### Virus.c Penjelasan
+
+1. **Include Libraries**: Program dimulai dengan menyertakan beberapa pustaka standar seperti `<stdio.h>`, `<stdlib.h>`, dan lainnya yang dibutuhkan untuk operasi file dan waktu.
+
+2. **Makro dan Konstanta**: `MAX_PATH_LENGTH`, `MAX_FILE_LENGTH`, dan `LOG_FILE` didefinisikan. Ini adalah batasan panjang untuk path file, panjang file, dan nama file log.
+
+   ```c
+   #define MAX_PATH_LENGTH 512
+   #define MAX_FILE_LENGTH 1024
+   #define LOG_FILE "virus.log"
+   ```
+
+4. **CustomStringReplace Function**: Ini adalah fungsi untuk menggantikan semua kemunculan string khusus (dalam hal ini, "3ncrYp73DStr1nG") dalam sebuah string dengan string pengganti (dalam hal ini, "[ENCRYPTED_STRING]").
+   ```c
+   void CustomStringReplace(char *str, const char *old, const char *new) {
+    char *pos, temp[MAX_FILE_LENGTH];
+    int index = 0;
+    int oldLen = strlen(old);
+    int newLen = strlen(new);
+
+    while ((pos = strstr(str, old)) != NULL) {
+        strcpy(temp, str);
+        index = pos - str;
+        str[index] = '\0';
+        strcat(str, new);
+        strcat(str, temp + index + oldLen);
+    }
+
+   ```
+
+6. **CustomLog Function**: Fungsi ini digunakan untuk mencatat waktu dan file yang terpengaruh saat menggantikan string khusus.
+   ```c
+   void CustomLog(const char *filename, const char *ReplacedString) {
+    time_t current_time;
+    struct tm *local_time;
+    char timeString[20];
+
+    FILE *logFile = fopen(LOG_FILE, "a");
+    if (logFile == NULL) {
+        perror("Error opening log file");
+        exit(EXIT_FAILURE);
+    }
+
+    time(&current_time);
+    local_time = localtime(&current_time);
+    strftime(timeString, sizeof(timeString), "%d-%m-%Y %H:%M:%S", local_time);
+
+    fprintf(logFile, "[%s] Suspicious String at %s successfully replaced!\n", timeString, filename);
+    fclose(logFile);
+   ```
+
+8. **ScanAndReplace Function**: Fungsi ini melakukan pemindaian rekursif pada direktori yang diberikan dan mengganti string khusus dalam semua file di dalamnya menggunakan fungsi `CustomStringReplace`. Jika sebuah direktori ditemukan, fungsi akan memanggil dirinya sendiri secara rekursif untuk memindai subdirektori.
+   ```c
+   void ScanAndReplace(const char *path) {
+    struct stat fileStat;
+    char FilePath[MAX_PATH_LENGTH];
+    DIR *dir;
+    struct dirent *entry;
+
+    if ((dir = opendir(path)) == NULL) {
+        perror("Error opening directory");
+        exit(EXIT_FAILURE);
+    }
+
+    while ((entry = readdir(dir)) != NULL) {
+        snprintf(FilePath, sizeof(FilePath), "%s/%s", path, entry->d_name);
+        
+        if (stat(FilePath, &fileStat) < 0) {
+            perror("Error stating file");
+            exit(EXIT_FAILURE);
+        }
+
+        if (S_ISDIR(fileStat.st_mode)) {
+            if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+                continue;
+            }
+            ScanAndReplace(FilePath);
+        } else {
+            FILE *file = fopen(FilePath, "r+");
+            if (file == NULL) {
+                perror("Error opening file");
+                exit(EXIT_FAILURE);
+            }
+
+            char FileContent[MAX_FILE_LENGTH];
+            while (fgets(FileContent, sizeof(FileContent), file) != NULL) {
+                if (strstr(FileContent, "3ncrYp73DStr1nG") != NULL) {
+                    CustomStringReplace(FileContent, "3ncrYp73DStr1nG", "[ENCRYPTED_STRING]");
+                    fputs(FileContent, file);
+                    CustomLog(FilePath, "3ncrYp73DStr1nG");
+                }
+                // Add more custom string checks here
+            }
+            fclose(file);
+        }
+    }
+    closedir(dir);
+   ```
+
+10. **Main Function**: Program dimulai dengan memeriksa apakah argumen yang diberikan sesuai (hanya satu path folder yang diperlukan). Kemudian, program berjalan sebagai daemon yang berulang kali memanggil `ScanAndReplace` pada folder yang ditentukan setiap 15 detik.
+    ```c
+    int main(int argc, char *argv[]) {
+    if (argc != 2) {
+        fprintf(stderr, "Usage: %s <folder_path>\n", argv[0]);
+        exit(EXIT_FAILURE);
+    }
+
+    daemon(1, 0);
+
+    while (1) {
+        ScanAndReplace(argv[1]);
+        sleep(15);
+    }
+
+    return 0;
+    ```
+
+### Cara Kerja
+
+- Program akan dijalankan dengan memberikan path folder sebagai argumen.
+- Virus akan terus memindai folder dan subfolder secara rekursif setiap 15 detik.
+- Setiap kali ia menemukan file yang mengandung string "3ncrYp73DStr1nG", string tersebut akan diganti dengan "[ENCRYPTED_STRING]" dalam file tersebut.
+- Setiap perubahan yang dilakukan akan dicatat dalam file log `virus.log` beserta waktu dan nama file yang terpengaruh.
+
+### Virus.c Output
+
+
+![Screenshot 2024-04-26 172950](https://github.com/agnesgriselda/Sisop-2-2024-MH-IT10/assets/150202762/2551e1d4-2dba-4683-8d7b-8ed72c0b7cf7)
+
+
+![Screenshot 2024-04-26 173058](https://github.com/agnesgriselda/Sisop-2-2024-MH-IT10/assets/150202762/1e2cc192-98ef-485d-93cd-a4efb9f2ad53)
+
 
 ## Soal 2
 
@@ -166,4 +300,163 @@ Command ini hanya mematikan aplikasi yang dijalankan dengan
 ./setup -f file.conf
 ```
 
+### Setup.c Penjelasan
+
+1. **Include Libraries**: Program memulai dengan menyertakan beberapa pustaka standar seperti `<stdio.h>`, `<stdlib.h>`, `<string.h>`, `<unistd.h>`, `<sys/types.h>`, dan `<sys/wait.h>`. Ini memungkinkan program untuk melakukan operasi I/O, manajemen memori, manipulasi string, dan mengatur proses.
+
+2. **Makro dan Konstanta**: Program mendefinisikan beberapa makro dan konstanta seperti `MAX_APPS` untuk batasan maksimum jumlah aplikasi yang dapat diluncurkan, dan `MAX_NAME_LENGTH` untuk panjang maksimum nama aplikasi.
+   ```c
+   #define MAX_APPS 10
+   #define MAX_NAME_LENGTH 50
+   ```
+
+4. **launch_apps Function**: Fungsi ini bertugas meluncurkan aplikasi-aplikasi yang diinginkan oleh pengguna. Setiap aplikasi diluncurkan dengan jumlah instance tertentu menggunakan `fork()` dan `execlp()`.
+   ```c
+   void launch_apps(char *apps[], int *instances, int count) {
+    for (int i = 0; i < count; i++) {
+        for (int j = 0; j < instances[i]; j++) {
+            pid_t pid = fork();
+            if (pid == 0) {
+                execlp(apps[i], apps[i], NULL);
+                exit(0);
+            } else if (pid < 0) {
+                printf("Error: Fork failed\n");
+            }
+   ```
+
+6. **load_configuration Function**: Fungsi ini memuat konfigurasi dari file yang diberikan oleh pengguna. Setiap baris dalam file konfigurasi berisi nama aplikasi dan jumlah instance yang akan diluncurkan. Fungsi ini menggunakan `fork()` dan `execlp()` untuk meluncurkan aplikasi sesuai konfigurasi.
+   ```c
+   void load_configuration(char *config_file) {
+    FILE *file = fopen(config_file, "r");
+    if (file == NULL) {
+        printf("Error: Cannot open file %s\n", config_file);
+        return;
+    }
+
+    printf("Reading configuration from file %s:\n", config_file);
+
+    char app[MAX_NAME_LENGTH];
+    int num;
+
+    while (fscanf(file, "%s %d", app, &num) == 2) {
+        printf("Launching %d instances of %s\n", num, app);
+        for (int i = 0; i < num; i++) {
+            pid_t pid = fork();
+            if (pid == 0) {
+                execlp(app, app, NULL);
+                exit(0);
+            } else if (pid < 0) {
+                printf("Error: Fork failed\n");
+            }
+        }
+    }
+
+    fclose(file);
+   ```
+
+8. **terminate_all_apps Function**: Fungsi ini digunakan untuk menutup semua aplikasi yang telah diluncurkan. Menggunakan `pkill` untuk menghentikan aplikasi secara paksa dengan nama yang spesifik.
+   ```c
+   void terminate_all_apps() {
+    pid_t pid = fork();
+    if (pid == 0) {
+        execlp("pkill", "pkill", "firefox", NULL);
+        exit(0);
+    } else if (pid < 0) {
+        printf("Error: Fork failed\n");
+    } else {
+        wait(NULL);
+    }
+
+    pid = fork();
+    if (pid == 0) {
+        execlp("pkill", "pkill", "wireshark", NULL);
+        exit(0);
+    } else if (pid < 0) {
+        printf("Error: Fork failed\n");
+    } else {
+        wait(NULL);
+    }
+    // Add more applications as needed
+   ```
+
+10. **terminate_apps_from_config Function**: Fungsi ini menutup aplikasi-aplikasi yang disebutkan dalam file konfigurasi yang diberikan oleh pengguna. Sama seperti `terminate_all_apps`, namun membaca daftar aplikasi dari file konfigurasi.
+    ```c
+    void terminate_apps_from_config(char *config_file) {
+    FILE *file = fopen(config_file, "r");
+    if (file == NULL) {
+        printf("Error: Cannot open file %s\n", config_file);
+        return;
+    }
+
+    char app[MAX_NAME_LENGTH];
+    while (fscanf(file, "%s", app) == 1) {
+        pid_t pid = fork();
+        if (pid == 0) {
+            execlp("pkill", "pkill", app, NULL);
+            exit(0);
+        } else if (pid < 0) {
+            printf("Error: Fork failed\n");
+        } else {
+            wait(NULL);
+        }
+    }
+
+    fclose(file);
+    ```
+
+12. **Main Function**: Fungsi utama dari program. Memeriksa argumen baris perintah untuk menentukan tindakan yang akan diambil. Kemudian, memanggil fungsi-fungsi yang sesuai berdasarkan argumen yang diberikan.
+    ```c
+    int main(int argc, char *argv[]) {
+    if (argc < 2) {
+        printf("Usage: %s [-l <app1> <num1> <app2> <num2> ... <appN> <numN>] [-c <config_file>] [-t]\n", argv[0]);
+        return 1;
+    }
+
+    if (strcmp(argv[1], "-l") == 0) {
+        int num_apps = (argc - 2) / 2;
+        char *apps[MAX_APPS];
+        int instances[MAX_APPS];
+
+        for (int i = 0; i < num_apps; i++) {
+            apps[i] = argv[i * 2 + 2];
+            instances[i] = atoi(argv[i * 2 + 3]);
+        }
+
+        launch_apps(apps, instances, num_apps);
+    } else if (strcmp(argv[1], "-c") == 0) {
+        if (argc != 3) {
+            printf("Usage: %s -c <config_file>\n", argv[0]);
+            return 1;
+        }
+        load_configuration(argv[2]);
+    } else if (strcmp(argv[1], "-t") == 0) {
+        if (argc == 3 && strcmp(argv[2], "-c") == 0) {
+            if (argc != 4) {
+                printf("Usage: %s -t <config_file>\n", argv[0]);
+                return 1;
+            }
+            terminate_apps_from_config(argv[3]);
+        } else {
+            terminate_all_apps();
+        }
+    } else {
+        printf("Invalid option: %s\n", argv[1]);
+        return 1;
+    }
+
+    return 0;
+    ```
+
+### Cara Kerja
+
+- Pengguna menjalankan program dengan argumen seperti meluncurkan aplikasi, memuat konfigurasi, atau menutup aplikasi.
+- Jika argumen adalah `-l`, program meluncurkan aplikasi-aplikasi dengan instance yang sesuai.
+- Jika argumen adalah `-c`, program memuat konfigurasi dari file yang diberikan.
+- Jika argumen adalah `-t`, program menutup aplikasi-aplikasi, baik semua aplikasi atau berdasarkan konfigurasi yang diberikan.
+
+### Setup.c Output
+
+![Screenshot 2024-04-26 173331](https://github.com/agnesgriselda/Sisop-2-2024-MH-IT10/assets/150202762/2d57357f-8d7f-4c28-9436-1d1b23e64b18)
+
+![Screenshot 2024-04-26 173404](https://github.com/agnesgriselda/Sisop-2-2024-MH-IT10/assets/150202762/6a66f277-6c2f-4ad2-a148-a449bd2bc2f9)
 
