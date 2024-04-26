@@ -238,8 +238,8 @@ Berikut adalah struktur folder untuk pengerjaan nomor 2:
 3. **Declare Char** : Declare beberapa char yang dibutuhkan diawal namun nantinya masih dibutuhkan declare char disetiap fungsi terutama untuk penggunaan fungsi rekursif dan pointer
     ```
     char cwd[MAX_BUFFER_SIZE];
-char dir_path[MAX_BUFFER_SIZE];
-char log_file_path[MAX_BUFFER_SIZE];
+    char dir_path[MAX_BUFFER_SIZE];
+    char log_file_path[MAX_BUFFER_SIZE];
     ```
 4. **Declare Variabel Khusus** : Disini diperlukan deklarasi variabel khusus dengan beberapa fungsi yaitu `volatile` yang berfungsi untuk memberitahu compiler bahwa nilai variabel bisa berubah kapan saja,  `<sig_atomic_t>` ini adalah tipe data yang digunakan untuk variabel yang bisa diakses sebagai satu unit atomik dari sebuah handler sinyal, lalu `<mode = 0>` ini adalah inisialisasi variabel mode dengan nilai 0. Ini mengatur nilai awal dari variabel tersebut, dan nilai ini bisa diubah oleh program, misalnya dalam respons terhadap sinyal tertentu atau peristiwa lain.
  ```
