@@ -782,6 +782,209 @@ sehingga user tidak bisa menjalankan proses yang dia inginkan dengan baik. Fitur
 ```
 g. Ketika proses yang dijalankan user digagalkan, program juga akan melog dan menset log tersebut sebagai __GAGAL__. Dan jika di log menggunakan fitur poin c, log akan ditulis dengan __JALAN__
 
+### Penjelasan admin.c
+1. **Include Library** : Program memulai dengan menyertakan beberapa pustaka standar seperti `<stdio.h>`, `<stdlib.h>`, `<string.h>`, `<unistd.h>`, `<sys/types.h>`, `<signal.h>`, `<time.h>`, dan `<sys/wait.h>`. Ini memungkinkan program untuk melakukan operasi I/O, manajemen memori, manipulasi string, menerima sinyal, manipulasi waktu, dan mengatur proses.
+   
+3. **Makro dan Konstanta**: Program mendefinisikan `MAX_COMMAND_LENGTH` sebagai panjang maksimum string untuk perintah yang akan dieksekusi.
+   ```
+   #define MAX_COMMAND_LENGTH 1024
+   ```
+   
+4. **show_processes** : Fungsi yang digunakan untuk menampilkan proses yang sedang berjalan dengan menggunakan `fork()` untuk membuat proses baru. Dalam child process terdapat perintah untuk mengeksekusi `ps` untuk menampilkan proses pengguna dan menggunakan `wait()` untuk menunggu child process selesai.
+   ```
+   void show_processes(char *user) {
+      pid_t pid = fork();
+      if (pid == 0) {
+          char command[MAX_COMMAND_LENGTH];
+          snprintf(command, MAX_COMMAND_LENGTH, "ps -u %s", user);
+          execl("/bin/sh", "sh", "-c", command, NULL);
+          perror("execl");
+          exit(EXIT_FAILURE);
+      } else if (pid < 0) {
+        perror("fork");
+        exit(EXIT_FAILURE);
+      } else {
+        wait(NULL);
+      }
+    }
+  ``
+
+5. **check_process_status** : Fungsi yang digunakan untuk memeriksa status suatu proses berdasarkan PID. Pertama, membuat path ke file status suatu proses dalam `/proc` dan menggunakan `access()` untuk memeriksa apakah file status ada atau tidak.
+   ```
+    int check_process_status(int pid) {
+      char status_file[MAX_COMMAND_LENGTH];
+      snprintf(status_file, MAX_COMMAND_LENGTH, "/proc/%d", pid);
+      if (access(status_file, F_OK) != -1) {
+          return 1; // Proses sedang berjalan
+      } else {
+          return 0; // Proses tidak berjalan
+      }
+    }
+   ``
+
+6. **monitor_processes** : Fungsi yang digunakan untuk memantau proses yang dijalankan oleh pengguna dengan membuka file log untuk mencatat informasi proses. Kemudian, melakukan loop dengan menggunakan `ps` melalui `popeon()` untuk mendapatkan daftar proses yang dijalankan dan tiap baris dari output `ps` diproses untuk mendapatkan PID, nama proses, dan status proses kemudian informasi proses dicatat ke file log.
+   ```
+   void monitor_processes(char *user) {
+      pid_t pid;
+      char log_file[MAX_COMMAND_LENGTH];
+      snprintf(log_file, MAX_COMMAND_LENGTH, "%s.log", user);
+      FILE *fp = fopen(log_file, "a");
+      if (fp == NULL) {
+          fprintf(stderr, "Tidak dapat membuka file log %s\n", log_file);
+          return;
+      }
+
+      while (1) {
+          char command[MAX_COMMAND_LENGTH];
+          snprintf(command, MAX_COMMAND_LENGTH, "ps -u %s --no-headers -o pid,command", user);
+          FILE *pipe = popen(command, "r");
+          if (pipe == NULL) {
+              fprintf(stderr, "Tidak dapat menjalankan command %s\n", command);
+              fclose(fp);
+              return;
+          }
+
+          char line[MAX_COMMAND_LENGTH];
+          time_t current_time = time(NULL);
+          struct tm *local_time = localtime(&current_time);
+          char timestamp[20];
+          char date[11];
+          strftime(timestamp, sizeof(timestamp), "%H:%M:%S", local_time);
+          strftime(date, sizeof(date), "%d-%m-%Y", local_time);
+
+          while (fgets(line, sizeof(line), pipe)) {
+              char pid_str[10], process[MAX_COMMAND_LENGTH];
+              sscanf(line, "%s %[^\n]", pid_str, process);
+              int pid = atoi(pid_str);
+              char status[7] = "JALAN"; // Asumsikan semua proses berjalan dengan baik
+
+              if (!check_process_status(pid)) {
+                   strcpy(status, "GAGAL"); // Jika proses tidak berjalan, ubah status menjadi GAGAL
+              }
+
+              fprintf(fp, "[%s]-[%s]-%d-%s-%s\n", date, timestamp, pid, process, status);
+          }
+
+          pclose(pipe);
+          sleep(1);
+      }
+
+      fclose(fp);
+    }
+   ``
+
+7. **kill_processes** : Fungsi yang digunakan untuk menghentikan semua proses yang dijalankan dan menghentikannya menggunakan `pkill`.
+   ```
+   void kill_processes(char *user) {
+      pid_t pid = fork();
+      if (pid == 0) {
+          char command[MAX_COMMAND_LENGTH];
+          snprintf(command, MAX_COMMAND_LENGTH, "pkill -u %s", user);
+          execl("/bin/sh", "sh", "-c", command, NULL);
+          perror("execl");
+          exit(EXIT_FAILURE);
+      } else if (pid < 0) {
+        perror("fork");
+        exit(EXIT_FAILURE);
+      } else {
+        wait(NULL);
+      }
+    }
+   ``
+
+8. **main function** : Fungsi utama untuk memeriksa baris perintah untuk menentukan operasi yang dijalankan dengan menggunakan `fork()` untuk membuat proses baru dan `wait()` untuk menunggu child process selesai.
+   ```
+   int main(int argc, char *argv[]) {
+      if (argc < 3) {
+          fprintf(stderr, "Penggunaan: %s <opsi> <user>\n", argv[0]);
+          fprintf(stderr, "Opsi:\n");
+          fprintf(stderr, "  -l: Tampilkan proses yang sedang berjalan\n");
+          fprintf(stderr, "  -m: Pantau proses yang dijalankan\n");
+          fprintf(stderr, "  -s: Hentikan pemantauan proses\n");
+          fprintf(stderr, "  -c: Gagalkan proses yang dijalankan secara terus-menerus\n");
+          fprintf(stderr, "  -a: Hentikan penggagalan proses\n");
+          return 1;
+      }
+
+      char *option = argv[1];
+      char *user = argv[2];
+
+      if (strcmp(option, "-l") == 0) {
+          show_processes(user);
+      } else if (strcmp(option, "-m") == 0) {
+          pid_t pid = fork();
+          if (pid == 0) {
+              monitor_processes(user);
+              exit(0);
+          } else if (pid < 0) {
+              perror("fork");
+              exit(EXIT_FAILURE);
+          }
+      } else if (strcmp(option, "-s") == 0) {
+          pid_t pid = fork();
+          if (pid == 0) {
+              char command[MAX_COMMAND_LENGTH];
+              snprintf(command, MAX_COMMAND_LENGTH, "pkill -f 'monitor_processes %s'", user);
+              execl("/bin/sh", "sh", "-c", command, NULL);
+              perror("execl");
+              exit(EXIT_FAILURE);
+          } else if (pid < 0) {
+              perror("fork");
+              exit(EXIT_FAILURE);
+          } else {
+              wait(NULL);
+          }
+      } else if (strcmp(option, "-c") == 0) {
+          pid_t pid = fork();
+          if (pid == 0) {
+              while (1) {
+                  kill_processes(user);
+                  sleep(1);
+              }
+              exit(0);
+          } else if (pid < 0) {
+              perror("fork");
+              exit(EXIT_FAILURE);
+          }
+      } else if (strcmp(option, "-a") == 0) {
+          pid_t pid = fork();
+          if (pid == 0) {
+              char command[MAX_COMMAND_LENGTH];
+              snprintf(command, MAX_COMMAND_LENGTH, "pkill -f 'kill_processes %s'", user);
+              execl("/bin/sh", "sh", "-c", command, NULL);
+              perror("execl");
+              exit(EXIT_FAILURE);
+          } else if (pid < 0) {
+              perror("fork");
+              exit(EXIT_FAILURE);
+          } else {
+              wait(NULL);
+          }
+      } else {
+          fprintf(stderr, "Opsi tidak valid\n");
+          return 1;
+      }
+
+      return 0;
+    }
+   ``
+
+### Cara kerja admin.c
+- Pengguna menjalankan program dengan argumen seperti menampilkan proses yang sedang berjalan, memantau proses yang dijalankan dan mencatat log ke file, menghentikan pemantauan proses yang sedang berlangsung, memulai proses secara terus-menerus, dan menghentikan proses secara terus menerus.
+- Jika argumen adalah `-l`, program menampilkan proses yang sedang berjalan.
+- Jika argumen adalah `-m`, program memantau proses yang dijalankan dan mencatat log ke file.
+- Jika argumen adalah `-s`, program menghentikan pemantauan proses yang sedang berlangsung.
+- Jika argumen adalah `-c`, program memulai proses secara terus-menerus.
+- Jika argumen adalah `-t`, program menghentikan proses secara terus menerus.
+    
+### Output admin.c
+![Screenshot from 2024-04-27 19-27-28](https://github.com/agnesgriselda/Sisop-2-2024-MH-IT10/assets/150429708/bd6d237e-5c46-4bb7-8b66-95508e79e79e)
+
+Terdapat kesalahan pada ./admin -c pikaa dimana jika saya run laptop saya mati
+
+### Output pikaa.log
+![Screenshot from 2024-04-27 19-29-40](https://github.com/agnesgriselda/Sisop-2-2024-MH-IT10/assets/150429708/c295e7cf-0dd1-4195-a245-b6de569f4b21)
+
 
 ## Soal 4
 
