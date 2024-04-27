@@ -741,6 +741,9 @@ int main(int argc, char **argv)
 3. lalu gunakan perintah `ls` untuk memeriksa apakah berhasil tidak. Jika berhasil akan muncul direktori `library` yang mana jika kita masuk kedalamnya dengan perintah `cd library` maka kita akan masuk dan dapat melihat file yang telah di unzip
 4. lalu jika sudah memastikan fungsi tersebut, kita harus memeriksa apakah fungsi backup bisa yaitu dengan perintah `./management -m backup`, jika berhasil maka ketika masuk ke library kita bisa melihat backup sebagai direktori yang menyimpan beberapa file selain yang sudah berubah seperti `calculator.py` dan lain lain.
 5. lalu kita juga harus memeriksa fungsi lain yaitu restore yang akan menggunakan perintah sebagai berikut `./management -m restore` perintah ini akan membuat direktori backup kosong dan mengembalikan file ke direktori library
+### Revisi
+1. Keseluruhan Kode sehingga bisa menjalankan fungsi sebisa mungkin
+2. Kode berhasil direvisi sampai bisa melaksanakan download beserta unzip file, fungsi restore dan backup. Untuk fungsi signal masih terkendala
 ### Output Management.c
 ![WhatsApp Image 2024-04-27 at 01 08 19 (2)](https://github.com/agnesgriselda/Sisop-2-2024-MH-IT10/assets/144348985/237a5d98-9305-47b5-9e06-2296daade986)
 ![WhatsApp Image 2024-04-27 at 01 08 19 (1)](https://github.com/agnesgriselda/Sisop-2-2024-MH-IT10/assets/144348985/a707d38a-d721-4690-849f-e6791342c437)
